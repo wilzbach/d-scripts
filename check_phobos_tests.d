@@ -29,6 +29,19 @@ class TestVisitor : ASTVisitor
     alias visit = ASTVisitor.visit;
 	override void visit(const Unittest u)
 	{
+	    // scan the previous line for ddoc header
+	    auto loc = u.location + 0;
+	    while (sourceCode[loc] != '\n')
+            loc--;
+	    loc--;
+	    auto ddoc = 0;
+	    while (sourceCode[loc] != '\n')
+	        if (sourceCode[loc--] == '/')
+	            ddoc++;
+
+        if (ddoc < 3)
+            return;
+
         outFile.write("unittest\n{\n");
         outFile.write("import ");
         outFile.write(moduleName);
@@ -59,14 +72,15 @@ void parseTests(string fileName, string moduleName, string outFileName)
 	visitor.visit(m);
 }
 
-void parseFile(string fileName, string outputDir, string modulePrefix = "")
+void parseFile(string phobosDir, string fileName, string outputDir, string modulePrefix = "")
 {
     import std.path: buildPath, dirSeparator, buildNormalizedPath;
-    fileName = buildNormalizedPath(fileName);
-    string filePrefix = fileName.replace(".d", "");
-    string moduleName = modulePrefix ~ filePrefix.replace(dirSeparator, ".").replace(".package", "");
+    string fileNameNormalized = fileName.replace(phobosDir, "")[1..$];
+    writeln(fileNameNormalized);
+    string filePrefix = fileNameNormalized.replace(".d", "").replace(dirSeparator, ".");
+    string moduleName = modulePrefix ~ filePrefix.replace(".package", "");
 
-    string outName = fileName.replace("./", "").replace(dirSeparator, "_");
+    string outName = fileNameNormalized.replace("./", "").replace(dirSeparator, "_");
     parseTests(fileName, moduleName, buildPath(outputDir, outName));
 }
 
@@ -81,10 +95,10 @@ void main(string[] args){
 
     auto files = dirEntries(phobosDir, SpanMode.depth).array
                     .filter!(a => a.name().endsWith(".d") &&
-                                  !a.name().startsWith(outputDir));
+                                  !a.name().canFind(".git"));
     foreach (file; files)
     {
         writeln("parsing ", file);
-        parseFile(file, outputDir, "std.");
+        parseFile(phobosDir, file, outputDir);
     }
 }
